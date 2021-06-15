@@ -32,6 +32,11 @@ class PurchaseController < ApplicationController
     end
   end
 
+  def closed_carts
+    @closed_carts = Cart.all.where(status: :closed)
+    render json: @closed_carts, status: :ok
+  end
+
   private
 
   def checkout_data
