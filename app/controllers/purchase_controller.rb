@@ -24,7 +24,8 @@ class PurchaseController < ApplicationController
 
   def buy
     params.permit!
-    unless checkout_data.include? 'Invalid'
+
+    unless invalid_checkout_data
       Client.find(params[:client_id]).carts.where(status: :open).first.update!(status: :closed)
       render json: {'message'=> 'Successful purchase.'}, status: :ok
     else
@@ -47,17 +48,33 @@ class PurchaseController < ApplicationController
 
     is_client_data_correct = Client.find(params[:client_id]).name == params[:client_name] if client_exists
 
-    is_card_data_correct =  Client.find(params[:client_id]).card.cardNumber == params[:credit_card][:card_number] &&
-                            Client.find(params[:client_id]).card.ccv == params[:credit_card][:ccv] &&
+    is_card_data_correct =  Client.find(params[:client_id]).card.cardNumber.to_s == params[:credit_card][:card_number] &&
+                            Client.find(params[:client_id]).card.ccv.to_s == params[:credit_card][:cvv] &&
                             Client.find(params[:client_id]).card.exp_date == params[:credit_card][:exp_date] &&
                             Client.find(params[:client_id]).name == params[:credit_card][:card_holder_name] if client_exists
 
-    is_total_correct = Client.find(params[:client_id]).carts.where(status: :open).first.total_price == params[:credit_card][:value] if client_exists
+    is_total_correct = Client.find(params[:client_id]).carts.where(status: :open).first.total_price == params[:total_to_pay].to_i if client_exists
 
-    if has_keys && is_client_data_correct && is_card_data_correct && is_total_correct
-      params
-    else
+    if has_keys == false || is_client_data_correct == false || is_card_data_correct == false
       {'message' => 'Invalid payload.'}
+    elsif is_total_correct == false
+      cart_price = Client.find(params[:client_id]).carts.where(status: :open).first.total_price
+      if params[:total_to_pay].to_i < cart_price
+        {'message' => 'Insufficient funds.'}
+      elsif params[:total_to_pay].to_i > cart_price
+        {'message' => "Change: #{ params[:total_to_pay].to_i - cart_price }."}
+      end
+    elsif has_keys && is_client_data_correct && is_card_data_correct && is_total_correct
+      params
+    end
+  end
+
+  def invalid_checkout_data
+    errors = ['Invalid', 'Insufficient', 'Change']
+    if checkout_data.include? 'message'
+        errors.any? { |error| checkout_data['message'].include? error }
+    else
+      false
     end
   end
 end
